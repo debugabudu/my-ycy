@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import logging
 import os
@@ -70,7 +71,8 @@ def init_session(trace_dir: Path) -> TraceSession | None:
         _SESSION = None
         return None
     run_id = uuid.uuid4().hex[:16]
-    path = trace_dir / f"run_{run_id}.jsonl"
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = trace_dir / f"{ts}_run_{run_id}.jsonl"
     _SESSION = TraceSession(run_id, path)
     snap = config_snapshot()
     _SESSION.write(

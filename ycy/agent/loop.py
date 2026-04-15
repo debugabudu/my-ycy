@@ -53,7 +53,7 @@ def agent_loop(messages: list):
         chain_parent = get_last_emitted_span_id()
         append_assistant(messages, response)
         if response.stop_reason != "tool_use":
-            return
+            return response
         used_names = [
             b.name for b in response.content if getattr(b, "type", None) == "tool_use"
         ]

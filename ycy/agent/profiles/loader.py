@@ -14,7 +14,7 @@ class AgentProfileLoader:
         self.profiles: dict[str, AgentProfile] = {}
         if agents_dir.exists():
             for f in sorted(agents_dir.rglob("AGENT.md")):
-                text = f.read_text()
+                text = f.read_text(encoding="utf-8", errors="replace")
                 raw_meta, body = split_frontmatter(text)
                 meta_raw: dict = {}
                 if raw_meta is not None:

@@ -8,7 +8,7 @@ class SkillLoader:
         self.skills = {}
         if skills_dir.exists():
             for f in sorted(skills_dir.rglob("SKILL.md")):
-                text = f.read_text()
+                text = f.read_text(encoding="utf-8", errors="replace")
                 raw_meta, body = split_frontmatter(text)
                 if raw_meta is not None:
                     meta = parse_simple_meta_lines(raw_meta)

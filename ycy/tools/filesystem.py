@@ -12,7 +12,7 @@ def safe_path(p: str) -> Path:
 
 def run_read(path: str, limit: int | None = None) -> str:
     try:
-        full = safe_path(path).read_text().splitlines()
+        full = safe_path(path).read_text(encoding="utf-8", errors="replace").splitlines()
         if limit and limit < len(full):
             lines = full[:limit] + [f"...（另有 {len(full) - limit} 行未显示）"]
         else:
@@ -26,7 +26,7 @@ def run_write(path: str, content: str) -> str:
     try:
         fp = safe_path(path)
         fp.parent.mkdir(parents=True, exist_ok=True)
-        fp.write_text(content)
+        fp.write_text(content, encoding="utf-8")
         return f"已写入 {path}（{len(content)} 字节）"
     except Exception as e:
         return f"错误：{e}"
@@ -35,10 +35,10 @@ def run_write(path: str, content: str) -> str:
 def run_edit(path: str, old_text: str, new_text: str) -> str:
     try:
         fp = safe_path(path)
-        c = fp.read_text()
+        c = fp.read_text(encoding="utf-8", errors="replace")
         if old_text not in c:
             return f"错误：在 {path} 中未找到待替换文本"
-        fp.write_text(c.replace(old_text, new_text, 1))
+        fp.write_text(c.replace(old_text, new_text, 1), encoding="utf-8")
         return f"已编辑 {path}"
     except Exception as e:
         return f"错误：{e}"

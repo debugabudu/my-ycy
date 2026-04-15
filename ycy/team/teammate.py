@@ -49,11 +49,14 @@ class TeammateManager:
 
     def _load(self) -> dict:
         if self.config_path.exists():
-            return json.loads(self.config_path.read_text())
+            return json.loads(self.config_path.read_text(encoding="utf-8"))
         return {"team_name": "default", "members": []}
 
     def _save(self):
-        self.config_path.write_text(json.dumps(self.config, indent=2))
+        self.config_path.write_text(
+            json.dumps(self.config, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
     def _find(self, name: str) -> dict | None:
         for m in self.config["members"]:
@@ -213,7 +216,7 @@ class TeammateManager:
                     break
                 unclaimed = []
                 for fp in sorted(TASKS_DIR.glob("task_*.json")):
-                    t = json.loads(fp.read_text())
+                    t = json.loads(fp.read_text(encoding="utf-8"))
                     if t.get("status") == "pending" and not t.get("owner") and not t.get(
                         "blockedBy"
                     ):
