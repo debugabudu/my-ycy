@@ -1,12 +1,46 @@
+import os
+import shlex
 import subprocess
 
 from ycy.config import WORKDIR
 
 
+def _validate_command(command: str) -> tuple[bool, str]:
+    cmd = (command or "").strip()
+    if not cmd:
+        return False, "空命令"
+    low = cmd.lower()
+    dangerous_patterns = [
+        "rm -rf /",
+        ":(){ :|:& };:",
+        "sudo ",
+        " shutdown",
+        " reboot",
+        "> /dev/",
+        "mkfs",
+        "dd if=",
+    ]
+    if any(p in low for p in dangerous_patterns):
+        return False, "命中危险命令规则"
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        return False, "命令解析失败"
+    if not tokens:
+        return False, "空命令"
+    # 可选前缀白名单：YCY_BASH_ALLOW_PREFIX="git,pytest,python,python3,ls"
+    allow_prefix = [
+        p.strip() for p in os.getenv("YCY_BASH_ALLOW_PREFIX", "").split(",") if p.strip()
+    ]
+    if allow_prefix and tokens[0] not in allow_prefix:
+        return False, f"命令前缀不在白名单：{tokens[0]}"
+    return True, ""
+
+
 def run_bash(command: str) -> str:
-    dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"]
-    if any(d in command for d in dangerous):
-        return "错误：已拦截危险命令"
+    ok, reason = _validate_command(command)
+    if not ok:
+        return f'{{"ok": false, "reason": "{reason}"}}'
     try:
         r = subprocess.run(
             command,

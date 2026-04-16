@@ -16,6 +16,8 @@
   - `skills/`：Skill（`SKILL.md`）
   - `.tasks/`：持久化看板任务 JSON
   - `.team/`：团队配置与收件箱
+  - `.sessions/`：短期会话记忆（按会话文件保存 history）
+  - `.memory/`：长期记忆与向量索引（SQLite）
   - `.trace/`：可选 JSONL 轨迹（`YCY_TRACE`）
   - `.transcripts/`：预留
 
@@ -25,6 +27,7 @@
 
 | 类别 | 工具名 | 说明 |
 |------|--------|------|
+| 联网检索 | `web_search` | 调用智谱 Web Search API，返回结构化搜索结果 JSON（需 `ZAI_API_KEY`） |
 | 工作区 | `bash`, `read_file`, `write_file`, `edit_file` | Shell 与文件读写；路径受工作区约束（见 `filesystem.safe_path`） |
 | 会话待办 | `todo_write` | 本会话内短清单（非 `.tasks` 看板） |
 | 子代理 | `task` | `prompt` + **必填** `profile`；隔离上下文与子集工具 |
@@ -34,6 +37,9 @@
 | 看板任务 | `task_create`, `task_get`, `task_update`, `task_list`, `claim_task` | `.tasks` 下持久任务；`claim_task` 将任务归属为当前身份（lead 为 `lead`） |
 | 团队 | `spawn_teammate`, `list_teammates`, `send_message`, `read_inbox`, `broadcast`, `shutdown_request`, `plan_approval` | 启停队友、列表、消息总线；主身份 id 为 **`lead`**（`LEAD_ACTOR_ID`） |
 | 队友专用（对 lead 多为无操作或提示） | `idle` | lead 调用时返回说明性文案；队友用于结束工作片段 |
+| 记忆（长期） | `memory_append`, `memory_search`, `memory_compact` | 显式写入/检索/压缩长期记忆，支持 tags、时间窗口、anchors 保护 |
+| 记忆（向量） | `vector_index`, `vector_search` | 对文本或目录建索引；按 namespace 检索语义近邻片段 |
+| Skill 沉淀 | `skill_draft_from_chat`, `skill_index_memory` | 从最近对话生成 Skill 草稿；将 Skill 关键片段写入记忆与向量索引 |
 
 主循环还会：**自动注入** lead 的 `read_inbox` 内容、后台任务完成通知；超过 `YCY_TOKEN_THRESHOLD` 时触发 `auto_compact`；若存在未完成 todo 且多轮未调用 `todo_write`，会插入提醒（见 `ycy/agent/loop.py`）。
 
@@ -60,6 +66,7 @@
 - Python 3；需安装 **`anthropic`** SDK 与 **`python-dotenv`**（见 `ycy/config.py`）。
 - 环境变量：
   - **`MODEL_ID`**：模型名称（必填，未设置时启动可能失败）。
+  - **`ZAI_API_KEY`**（可选）：启用 `web_search` 工具时必填（智谱/ZAI 的 API Key）。
   - **`ANTHROPIC_BASE_URL`**（可选）：兼容 Anthropic API 的网关（如智谱等）；若设置，会清除 `ANTHROPIC_AUTH_TOKEN` 以适配部分网关认证方式，请按你的服务商文档配置密钥环境变量。
 - 在项目根目录准备 **`.env`**（`load_dotenv`）写入上述变量。
 
@@ -91,6 +98,76 @@ python ycy.py
 6. **安全**：`bash` 有简单危险命令拦截；仍应对不可信代码与生产环境谨慎使用。
 7. **轨迹**：默认 `YCY_TRACE` 非 `0/false/no` 时写 `.trace/run_*.jsonl`；关闭可设 `YCY_TRACE=0`。
 8. **可调常量**：`YCY_TOKEN_THRESHOLD`、`YCY_SUBAGENT_MAX_TURNS`、`YCY_IDLE_TIMEOUT`、`YCY_POLL_INTERVAL` 等见 `ycy/constants.py`。
+9. **联网搜索**：`web_search` 依赖 `zai-sdk` 与环境变量 `ZAI_API_KEY`；可选参数包含 `count`、`search_engine`、`search_domain_filter`、`search_recency_filter`、`content_size`。
+
+### 2.5 记忆能力使用说明（1.1）
+
+#### A. 短期会话记忆（`.sessions/`）
+
+- 启动新会话：默认行为（不带 `--resume-session`）。
+- 续聊历史会话：
+  - `python ycy.py --resume-session latest`（最近一次）
+  - `python ycy.py --resume-session <session_id前缀>`
+  - `python ycy.py --resume-session <会话文件名>`
+- 每轮对话后会自动落盘；会话文件包含 `meta + history`。
+
+#### B. 长期记忆（显式写入，`.memory/memory.db`）
+
+- 写入：`memory_append`
+  - 最少参数：`text`
+  - 建议同时给：`tags`、`anchors`、`importance`
+- 检索：`memory_search`
+  - 支持 `query`（关键词）、`tags`（标签过滤）、`from_time/to_time`（ISO 时间窗口）、`limit`
+- 压缩：`memory_compact`
+  - `max_entries` 控制保留上限
+  - `preserve_anchors=true` 时默认保护含锚点条目（人名、长期目标、禁忌等）
+
+#### C. 向量检索（`.memory/vector.db`）
+
+- 建索引：`vector_index`
+  - 目录模式：传 `path`（会对 `.md/.txt` 分块索引）
+  - 文本模式：传 `text`（写入单条）
+  - 通过 `namespace` 隔离不同知识域（如 `notes`、`memories`）
+- 检索：`vector_search`
+  - 关键参数：`namespace`、`query`、`top_k`、`min_score`
+  - 返回内容包含片段文本与相关度分数，适合带引用回答
+
+#### D. 推荐使用流程（实践）
+
+1. 对“长期稳定信息”调用 `memory_append`（例如偏好、长期目标、禁忌）。
+2. 回忆历史事实时先 `memory_search`；不足再 `vector_search`。
+3. 用户指定目录（笔记/纪要）先 `vector_index`，之后复用 `namespace` 检索。
+4. 定期 `memory_compact`，并保持 `anchors` 完整，避免关键偏好被清掉。
+
+### 2.6 Skill 快速沉淀（1.3）
+
+#### A. 一键生成 Skill 草稿
+- 工具：`skill_draft_from_chat`
+- 作用：从最近会话提炼内容并写入 `skills/<name>/SKILL.md`
+- 常用参数：
+  - `name`：Skill id（必填）
+  - `focus`：可选聚焦主题
+  - `n_rounds`：回看最近轮次（默认 6）
+  - `overwrite`：已存在是否覆盖（默认 false）
+
+#### B. Skill 版本与摘要
+- `SKILL.md` frontmatter 建议包含：
+  - `version`（如 `0.1.0`）
+  - `updated`（ISO 日期）
+  - `summary`（一行摘要）
+- `load_skill` 支持：
+  - `mode=summary`：先返回摘要
+  - `mode=full`：返回全文（默认）
+
+#### C. 脚手架命令
+- 命令：`python ycy.py init skill <id>`
+- 作用：生成标准 `skills/<id>/SKILL.md`（含 frontmatter 与示例段落）
+
+#### D. 与记忆联动
+- 工具：`skill_index_memory`
+- 作用：把 Skill 关键片段写入：
+  - 长期记忆库（带 `skill:<name>` 标签）
+  - 向量索引（默认 `namespace=skills`）
 
 ---
 
@@ -192,5 +269,3 @@ python ycy.py
 | Skill 加载 | `ycy/skills/loader.py` |
 | 配置 | `ycy/config.py` |
 | 全局单例 | `ycy/container.py` |
-
-- 测试用例见 **`TEST.md`**；对标主流产品的补强清单见 **`TODO.md`**。

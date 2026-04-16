@@ -1,4 +1,5 @@
 import json
+import threading
 
 from ycy.config import TASKS_DIR
 
@@ -6,6 +7,7 @@ from ycy.config import TASKS_DIR
 class TaskManager:
     def __init__(self):
         TASKS_DIR.mkdir(exist_ok=True)
+        self._claim_lock = threading.Lock()
 
     def _next_id(self) -> int:
         ids = [int(f.stem.split("_")[1]) for f in TASKS_DIR.glob("task_*.json")]
@@ -83,8 +85,15 @@ class TaskManager:
         return "\n".join(lines)
 
     def claim(self, tid: int, owner: str) -> str:
-        task = self._load(tid)
-        task["owner"] = owner
-        task["status"] = "in_progress"
-        self._save(task)
-        return f"任务 #{tid} 已由「{owner}」认领"
+        with self._claim_lock:
+            task = self._load(tid)
+            if task.get("status") != "pending":
+                return f"任务 #{tid} 当前状态为 {task.get('status')}，不可认领"
+            if task.get("owner"):
+                return f"任务 #{tid} 已被「{task.get('owner')}」认领"
+            if task.get("blockedBy"):
+                return f"任务 #{tid} 仍被依赖阻塞：{task.get('blockedBy')}"
+            task["owner"] = owner
+            task["status"] = "in_progress"
+            self._save(task)
+            return f"任务 #{tid} 已由「{owner}」认领"

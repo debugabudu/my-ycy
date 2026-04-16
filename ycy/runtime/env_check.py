@@ -14,10 +14,14 @@ def ensure_dir(path: Path, *, label: str) -> None:
         _log.warning("Cannot create %s %s: %s", label, path, e)
 
 
-def verify_runtime(*, workdir: Path, trace_dir: Path, transcript_dir: Path) -> None:
+def verify_runtime(
+    *, workdir: Path, trace_dir: Path, transcript_dir: Path, sessions_dir: Path, memory_dir: Path
+) -> None:
     """尽力创建运行时目录；失败仅打日志。"""
     ensure_dir(workdir, label="workdir")
     ensure_dir(trace_dir, label="trace")
     ensure_dir(transcript_dir, label="transcript")
+    ensure_dir(sessions_dir, label="sessions")
+    ensure_dir(memory_dir, label="memory")
     if not os.environ.get("MODEL_ID"):
         _log.warning("MODEL_ID is not set; import of config may already have failed")

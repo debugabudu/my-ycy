@@ -20,14 +20,29 @@ class SkillLoader:
     def descriptions(self) -> str:
         if not self.skills:
             return "（当前未加载任何 Skill）"
-        return "\n".join(
-            f"  - {n}: {s['meta'].get('description', '-')}" for n, s in self.skills.items()
-        )
+        rows = []
+        for n, s in self.skills.items():
+            m = s["meta"]
+            desc = m.get("description", "-")
+            ver = m.get("version", "-")
+            updated = m.get("updated", "-")
+            rows.append(f"  - {n}: {desc} (v{ver}, updated={updated})")
+        return "\n".join(rows)
 
-    def load(self, name: str) -> str:
+    def load(self, name: str, *, mode: str = "full") -> str:
         s = self.skills.get(name)
         if not s:
             return (
                 f"错误：未知的 Skill「{name}」。可用：{', '.join(self.skills.keys())}"
             )
-        return f'<skill name="{name}">\n{s["body"]}\n</skill>'
+        meta = s["meta"]
+        body = s["body"]
+        if mode == "summary":
+            summary = meta.get("summary") or meta.get("description") or "（无摘要）"
+            return (
+                f'<skill_summary name="{name}" version="{meta.get("version", "-")}" '
+                f'updated="{meta.get("updated", "-")}">\n'
+                f"{summary}\n"
+                f"</skill_summary>"
+            )
+        return f'<skill name="{name}">\n{body}\n</skill>'

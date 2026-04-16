@@ -2,6 +2,36 @@ from ycy.constants import VALID_MSG_TYPES
 
 TOOLS = [
     {
+        "name": "current_time",
+        "description": "获取当前本地时间（含时区、ISO 时间、星期与 Unix 时间戳）。",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "web_search",
+        "description": "使用智谱 Web Search API 进行联网检索并返回结构化结果。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "搜索关键词或问题"},
+                "count": {"type": "integer", "description": "返回结果数（1-50，默认 8）"},
+                "search_engine": {
+                    "type": "string",
+                    "description": "搜索引擎档位（如 search_std/search_pro，默认 search_std）",
+                },
+                "search_domain_filter": {"type": "string", "description": "可选，限定检索域名"},
+                "search_recency_filter": {
+                    "type": "string",
+                    "description": "可选，时间范围过滤（默认 noLimit）",
+                },
+                "content_size": {
+                    "type": "string",
+                    "description": "摘要长度档位（low/medium/high，默认 medium）",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "bash",
         "description": "在 shell 中执行一条命令（工作目录一般为当前项目）。",
         "input_schema": {
@@ -47,6 +77,18 @@ TOOLS = [
                 "new_text": {"type": "string", "description": "替换后的新文本"},
             },
             "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "restore_file_backup",
+        "description": "使用备份文件恢复目标文件内容。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "目标文件路径"},
+                "backup_path": {"type": "string", "description": "备份文件路径"},
+            },
+            "required": ["path", "backup_path"],
         },
     },
     {
@@ -107,6 +149,38 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Skill 名称（与 skills 目录中定义一致）"},
+                "mode": {
+                    "type": "string",
+                    "enum": ["full", "summary"],
+                    "description": "加载模式：full 返回全文，summary 返回摘要",
+                },
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "skill_draft_from_chat",
+        "description": "从最近会话自动生成 Skill 草稿到 skills/<name>/SKILL.md。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Skill id"},
+                "focus": {"type": "string", "description": "可选，草稿聚焦主题"},
+                "n_rounds": {"type": "integer", "description": "提取最近轮次，默认 6"},
+                "overwrite": {"type": "boolean", "description": "已存在时是否覆盖"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "skill_index_memory",
+        "description": "将 Skill 关键片段写入长期记忆与向量索引。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Skill 名称"},
+                "namespace": {"type": "string", "description": "向量命名空间，默认 skills"},
+                "max_chunks": {"type": "integer", "description": "最多索引片段数，默认 8"},
             },
             "required": ["name"],
         },
@@ -126,6 +200,77 @@ TOOLS = [
         "name": "compress",
         "description": "手动触发对当前对话上下文的压缩摘要（节省 token）。",
         "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "memory_append",
+        "description": "向长期记忆库追加结构化记忆条目（显式写入）。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "记忆正文"},
+                "summary": {"type": "string", "description": "可选摘要"},
+                "source": {"type": "string", "description": "来源，如 user_note/session/tool_result"},
+                "run_id": {"type": "string", "description": "来源会话 run_id（可选）"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "anchors": {"type": "array", "items": {"type": "string"}},
+                "importance": {"type": "integer", "description": "1-5，默认 3"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "memory_search",
+        "description": "检索长期记忆，支持按关键词、标签、时间窗口过滤。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "from_time": {"type": "string", "description": "ISO 时间下限"},
+                "to_time": {"type": "string", "description": "ISO 时间上限"},
+                "limit": {"type": "integer", "description": "返回条数，默认 10"},
+            },
+        },
+    },
+    {
+        "name": "memory_compact",
+        "description": "压缩长期记忆条目，默认保护带 anchors 的条目。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_entries": {"type": "integer", "description": "最大保留条数，默认 500"},
+                "preserve_anchors": {"type": "boolean", "description": "是否保留带 anchors 的条目"},
+            },
+        },
+    },
+    {
+        "name": "vector_index",
+        "description": "向向量索引写入文本，或为指定目录建立分块索引。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": "string", "description": "索引命名空间，默认 notes"},
+                "path": {"type": "string", "description": "可选，目录路径（批量建索引）"},
+                "text": {"type": "string", "description": "可选，直接写入单条文本"},
+                "ref_type": {"type": "string", "description": "text 模式下的引用类型"},
+                "ref_id": {"type": "string", "description": "text 模式下的引用 id"},
+                "meta": {"type": "object", "description": "text 模式下附加元数据"},
+            },
+        },
+    },
+    {
+        "name": "vector_search",
+        "description": "在指定 namespace 中做向量近似检索并返回引用片段。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": "string", "description": "索引命名空间"},
+                "query": {"type": "string", "description": "检索问题"},
+                "top_k": {"type": "integer", "description": "返回条数，默认 5"},
+                "min_score": {"type": "number", "description": "最小相关度阈值，默认 0.05"},
+            },
+            "required": ["query"],
+        },
     },
     {
         "name": "background_run",

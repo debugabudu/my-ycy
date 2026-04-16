@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import threading
 import time
 
@@ -13,7 +14,7 @@ from ycy.agent.tool_runner import (
     response_requested_idle,
 )
 from ycy.config import MODEL, TASKS_DIR, TEAM_DIR, WORKDIR, client
-from ycy.constants import IDLE_TIMEOUT, POLL_INTERVAL
+from ycy.constants import IDLE_TIMEOUT, POLL_INTERVAL, TEAMMATE_MAX_TOOL_ROUNDS_PER_CYCLE
 from ycy.observability.tracing import get_last_emitted_span_id
 from ycy.tasks.board import TaskManager
 from ycy.team.bus import MessageBus
@@ -128,6 +129,8 @@ class TeammateManager:
             self.profile_loader
             if self.profile_loader is not None
             else container.AGENTS,
+            container.MEMORY,
+            container.VECTOR,
         )
 
     def _loop(
@@ -153,9 +156,9 @@ class TeammateManager:
             profile, name=name, role=role, team_name=team_name, workdir=WORKDIR
         )
         messages = [{"role": "user", "content": prompt}]
-        todo, skills, task_mgr, bg, bus, team, agents = self._handler_deps()
+        todo, skills, task_mgr, bg, bus, team, agents, memory, vector = self._handler_deps()
         handlers = make_tool_handlers(
-            todo, skills, task_mgr, bg, bus, team, agents, actor=name
+            todo, skills, task_mgr, bg, bus, team, agents, memory, vector, actor=name
         )
         bundle = build_teammate_bundle_from_profile(profile, handlers)
         auto_claim_runtime = profile.auto_claim_tasks and _bundle_has_claim_task(bundle)
@@ -165,7 +168,7 @@ class TeammateManager:
             _log.debug("Teammate %s: bundle 无 claim_task，跳过 idle 自动抢单", name)
         chain_parent = trace_parent_span_id
         while True:
-            for _ in range(50):
+            for _ in range(TEAMMATE_MAX_TOOL_ROUNDS_PER_CYCLE):
                 inbox = self.bus.read_inbox(name)
                 for msg in inbox:
                     if msg.get("type") == "shutdown_request":
@@ -222,8 +225,16 @@ class TeammateManager:
                     ):
                         unclaimed.append(t)
                 if unclaimed and auto_claim_runtime:
-                    task = unclaimed[0]
-                    self.task_mgr.claim(task["id"], name)
+                    random.shuffle(unclaimed)
+                    claimed_task = None
+                    for candidate in unclaimed:
+                        claim_msg = self.task_mgr.claim(candidate["id"], name)
+                        if "已由" in claim_msg:
+                            claimed_task = candidate
+                            break
+                    if claimed_task is None:
+                        continue
+                    task = claimed_task
                     if len(messages) <= 3:
                         messages.insert(
                             0,
@@ -239,7 +250,7 @@ class TeammateManager:
                             1,
                             {
                                 "role": "assistant",
-                                "content": f"I am {name}. Continuing.",
+                                "content": f"我是{name}，继续执行。",
                             },
                         )
                     messages.append(
@@ -254,7 +265,7 @@ class TeammateManager:
                     messages.append(
                         {
                             "role": "assistant",
-                            "content": f"Claimed task #{task['id']}. Working on it.",
+                            "content": f"已认领任务 #{task['id']}，开始处理。",
                         }
                     )
                     resume = True

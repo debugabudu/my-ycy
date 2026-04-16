@@ -15,6 +15,7 @@ TOKEN_THRESHOLD = _env_int("YCY_TOKEN_THRESHOLD", 100000)
 POLL_INTERVAL = _env_int("YCY_POLL_INTERVAL", 5)
 IDLE_TIMEOUT = _env_int("YCY_IDLE_TIMEOUT", 60)
 SUBAGENT_MAX_TURNS_DEFAULT = _env_int("YCY_SUBAGENT_MAX_TURNS", 30)
+TEAMMATE_MAX_TOOL_ROUNDS_PER_CYCLE = _env_int("YCY_TEAMMATE_MAX_TOOL_ROUNDS", 50)
 
 VALID_MSG_TYPES = {
     "message",
@@ -26,5 +27,5 @@ VALID_MSG_TYPES = {
 
 # 消息总线 MessageBus 里的发送方/收件箱 id（与 loop、protocols 一致）
 LEAD_ACTOR_ID = "lead"
-# 所有子 agent 共用同一收件箱；并行多个 task 时会共享同一条 jsonl
-SUBAGENT_ACTOR_ID = "subagent"
+# 子代理实例 id 前缀；每次 task 调用应使用独立 actor id
+SUBAGENT_ACTOR_PREFIX = "subagent"

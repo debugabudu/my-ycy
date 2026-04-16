@@ -16,3 +16,5 @@ __pycache__/
 .tasks/
 .transcripts/
 .trace/
+.sessions/
+.memory/

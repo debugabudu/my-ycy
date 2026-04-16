@@ -1,10 +1,12 @@
+import uuid
+
 from ycy.agent.bundles import build_subagent_bundle_from_profile
 from ycy.agent.profiles.loader import AgentProfileLoader
 from ycy.agent.prompts import BUILTIN_SUBAGENT_SYSTEM
 from ycy.agent.profiles.prompting import resolve_subagent_system
 from ycy.agent.tool_runner import run_tool_agent_session, summarize_text_response
 from ycy.config import MODEL, WORKDIR, client
-from ycy.constants import SUBAGENT_ACTOR_ID, SUBAGENT_MAX_TURNS_DEFAULT
+from ycy.constants import SUBAGENT_ACTOR_PREFIX, SUBAGENT_MAX_TURNS_DEFAULT
 from ycy.observability.tracing import get_last_emitted_span_id
 
 
@@ -18,6 +20,7 @@ def run_subagent(
     from ycy.tools.handlers import make_tool_handlers
 
     agents = profiles if profiles is not None else container.AGENTS
+    actor_id = f"{SUBAGENT_ACTOR_PREFIX}-{uuid.uuid4().hex[:8]}"
     handlers = make_tool_handlers(
         container.TODO,
         container.SKILLS,
@@ -26,7 +29,9 @@ def run_subagent(
         container.BUS,
         container.TEAM,
         agents,
-        actor=SUBAGENT_ACTOR_ID,
+        container.MEMORY,
+        container.VECTOR,
+        actor=actor_id,
     )
 
     if not profile or not str(profile).strip():

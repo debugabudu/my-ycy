@@ -28,6 +28,14 @@ def build_system_prompt(
 队友：spawn_teammate 必须带 profile=（kind 含 teammate 的专家配置），成本较高，仅多专家协作时使用；通用模板可用 teammate-default。
 
 按需加载：load_skill 获取打包知识；需要完整配置正文时用 load_agent_profile。
+Skill 沉淀：可用 skill_draft_from_chat 将最近对话沉淀为 skills/<id>/SKILL.md 草稿。
+Skill 摘要：load_skill 支持 mode=summary 先看摘要，再决定是否加载全文。
+记忆联动：可用 skill_index_memory 将 Skill 关键片段写入长期记忆与向量索引。
+
+记忆策略：长期记忆只能通过 memory_append 显式写入；需要回忆历史事实时优先 memory_search，再视情况用 vector_search。
+可选索引：用户要求检索某目录笔记时，可先用 vector_index 建索引（按 namespace 管理），再用 vector_search 返回引用片段。
+压缩锚点：进行长期记忆压缩时使用 memory_compact，默认保留含 anchors（人名、长期目标、禁忌等）的条目。
+时间基准：涉及“今天/明天/后天/下周”等相对时间时，先调用 current_time 获取本地时间与时区，再进行推断或联网查询。
 
 协作：你在消息总线上的身份 id 为「{LEAD_ACTOR_ID}」；队友使用各自 spawn 时的 name。
 send_message、read_inbox、broadcast 会自动使用当前身份，无需改工具名。
